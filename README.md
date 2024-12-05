@@ -94,8 +94,4 @@ bash sinstall.sh
 
 ---
 
-## **License**
 
-This project is licensed under the [MIT License](LICENSE).
-
----
