@@ -20,7 +20,7 @@ using namespace std;
 
 #define ABS(A) ((A) < (0) ? -(A) : (A))
 
-#define FPS 80
+#define FPS 60
 const int row = 9, col = 15;
 int grid[row][col] = {0};
 bool isWord_PlaceHolder[row][col] = {0};
@@ -82,6 +82,9 @@ int soundcirclex = 606, musiccirclex = 606;
 int minutes = 2, second = 0;
 const int max_word = 10;
 string foundwords[max_word] = {""};
+Mix_Music *backgroundMusic = NULL;
+Mix_Chunk *touchSound = NULL;
+
 enum alphabets
 {
 
@@ -193,54 +196,6 @@ void DrawCircleslines(int startX, int startY, int radius, int lineLength, int ci
 		currentX += unitX * circleSpacing;
 		currentY += unitY * circleSpacing;
 	}
-}
-
-void playSoundWithVolumeAndLoop(const char *soundPath, int volume, bool loop)
-{
-
-	if (volume < 0)
-		volume = 0;
-	if (volume > 128)
-		volume = 128;
-
-	if (SDL_Init(SDL_INIT_AUDIO) < 0)
-	{
-		fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
-		return;
-	}
-
-	if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
-	{
-		fprintf(stderr, "Failed to initialize SDL_mixer: %s\n", Mix_GetError());
-		SDL_Quit();
-		return;
-	}
-
-	Mix_Chunk *sound = Mix_LoadWAV(soundPath);
-	if (!sound)
-	{
-		fprintf(stderr, "Failed to load sound: %s\n", Mix_GetError());
-		Mix_CloseAudio();
-		SDL_Quit();
-		return;
-	}
-
-	Mix_VolumeChunk(sound, volume);
-
-	int loopCount = loop ? -1 : 0;
-	if (Mix_PlayChannel(-1, sound, loopCount) == -1)
-	{
-		fprintf(stderr, "Failed to play sound: %s\n", Mix_GetError());
-	}
-
-	if (!loop)
-	{
-		SDL_Delay(1000);
-	}
-
-	Mix_FreeChunk(sound);
-	Mix_CloseAudio();
-	SDL_Quit();
 }
 
 void loadLeaderboard(string userarr[], int scoresarr[])
@@ -916,7 +871,46 @@ void login()
 }
 
 bool ismusic = true, issound = true;
+void UpdateMusicVolumes()
+{
+	Mix_VolumeMusic(mvolume);
 
+	Mix_VolumeChunk(touchSound, svolume);
+}
+void InitializeAudio()
+{
+	if (Mix_OpenAudio(24100, MIX_DEFAULT_FORMAT, 2, 1024) < 0)
+	{
+		std::cerr << "SDL_mixer could not initialize! SDL_mixer Error: " << Mix_GetError() << std::endl;
+		return;
+	}
+
+	// Load background music
+	backgroundMusic = Mix_LoadMUS("sound/music.mp3");
+	if (backgroundMusic == NULL)
+	{
+		std::cerr << "Failed to load background music! SDL_mixer Error: " << Mix_GetError() << std::endl;
+		return;
+	}
+
+	// Play background music indefinitely
+	Mix_PlayMusic(backgroundMusic, -1);
+	Mix_VolumeMusic(50);
+
+	// UpdateMusicVolumes(); // Set initial volume
+
+	// Load touch sound effect
+	touchSound = Mix_LoadWAV("sound/touch2.mp3");
+	if (touchSound == NULL)
+	{
+		std::cerr << "Failed to load touch sound! SDL_mixer Error: " << Mix_GetError() << std::endl;
+		return;
+	}
+}
+void PlayTouchSound()
+{
+	Mix_PlayChannel(-1, touchSound, 0); // Play touch sound on a free channel
+}
 void Settings()
 {
 	isSetting = true;
@@ -1071,6 +1065,8 @@ void MouseClicked(int button, int state, int x, int y)
 {
 	if (state == GLUT_DOWN)
 	{
+		PlayTouchSound();
+
 		printStates();
 	}
 	y = height - y;
@@ -1151,21 +1147,24 @@ void MouseClicked(int button, int state, int x, int y)
 		if (x > 344 && x < 606 && y > 625 && y < 645)
 		{
 			musiccirclex = x;
-			mvolume = (musiccirclex - 344) / 262 * 120;
+			mvolume = ((musiccirclex - 344) * MIX_MAX_VOLUME) / 242;
 			cout << "Music slider clicked at: " << musiccirclex << endl;
+			UpdateMusicVolumes();
 		}
 
 		if (x > 344 && x < 606 && y > 520 && y < 545)
 		{
 			soundcirclex = x;
 			cout << "Sound slider clicked at: " << soundcirclex << endl;
-			svolume = (soundcirclex - 344) / 262 * 120;
+			svolume = ((soundcirclex - 344) * MIX_MAX_VOLUME) / 242;
+			UpdateMusicVolumes();
 		}
 
 		if (x > 623 && x < 668 && y > 619 && y < 665 && state == GLUT_DOWN)
 		{
 			ismusic = !ismusic;
 			musiccirclex = ismusic ? 606 : 344;
+			mvolume = ((musiccirclex - 344) * MIX_MAX_VOLUME) / 242;
 			cout << "Music toggled: " << (ismusic ? "On" : "Off") << endl;
 		}
 
@@ -1173,6 +1172,7 @@ void MouseClicked(int button, int state, int x, int y)
 		{
 			issound = !issound;
 			soundcirclex = issound ? 606 : 344;
+			svolume = ((soundcirclex - 344) * MIX_MAX_VOLUME) / 242;
 			cout << "Sound toggled: " << (issound ? "On" : "Off") << endl;
 		}
 		if (x > 371 && x < 546 && y < 451 && y > 409 && state == GLUT_DOWN)
@@ -1276,7 +1276,14 @@ bool HandleWallCollision(float nextX, float nextY, float &lastValidX, float &las
 		}
 
 		CheckAndRemoveWords(gridX, 0);
-
+		for (int i = 0; i < row; i++)
+		{
+			for (int j = 0; j < col; j++)
+			{
+				cout << grid[i][j] << "\t";
+			}
+			cout << endl;
+		}
 		currentX = lastValidX;
 		currentY = lastValidY;
 
@@ -1291,6 +1298,14 @@ bool HandleWallCollision(float nextX, float nextY, float &lastValidX, float &las
 			num--;
 		}
 		CheckAndRemoveWords(gridX, gridY);
+		for (int i = 0; i < row; i++)
+		{
+			for (int j = 0; j < col; j++)
+			{
+				cout << grid[i][j] << "\t";
+			}
+			cout << endl;
+		}
 		currentX = lastValidX;
 		currentY = lastValidY;
 
@@ -1364,7 +1379,6 @@ void clock(int m)
 				second = 60;
 				minutes--;
 			}
-			cout << minutes << " : " << second << endl;
 		}
 		else
 		{
@@ -1375,6 +1389,10 @@ void clock(int m)
 	if (isgameover)
 	{
 
+		if (oversec == 1)
+		{
+			updateLeaderboard(0);
+		}
 		oversec--;
 		if (oversec < 0)
 		{
@@ -1395,11 +1413,8 @@ void Reshape(int w, int h)
 
 int main(int argc, char *argv[])
 {
-
-	std::thread soundThread(playSoundWithVolumeAndLoop, "sound/music.mp3", mvolume, true);
-	soundThread.detach();
 	InitRandomizer();
-
+	InitializeAudio();
 	dictionary = new string[dictionarysize];
 	wordStartX = new int[MAX_WORDS];
 	wordStartY = new int[MAX_WORDS];
@@ -1417,7 +1432,7 @@ int main(int argc, char *argv[])
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
 	glutInitWindowPosition(0, 0);
 	glutInitWindowSize(width, height);
-	glutCreateWindow("ITCs Word Shooter");
+	glutCreateWindow("Name : Tayyab Hamad  Roll NO: 23i-0053");
 	SetCanvasSize(width, height);
 	updateLeaderboard(0);
 	RegisterTextures();
