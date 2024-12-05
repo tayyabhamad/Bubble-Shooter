@@ -89,8 +89,7 @@ bash sinstall.sh
 ## **Controls**
 
 - **Mouse Click**: Adjust volume sliders or interact with in-game elements.
-- **Arrow Keys**: Move your character or navigate menus.
-- **Spacebar**: Perform an action (e.g., shoot).
+-**ESC**: To exit the game.
 
 ---
 
